@@ -1,0 +1,5 @@
+.output
+.wxt
+node_modules
+*.min.js
+src/public

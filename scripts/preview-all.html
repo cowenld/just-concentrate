@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Just Concentrate — All States Preview</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: system-ui, sans-serif; background: #18181b; color: #a1a1aa; padding: 40px; }
+    h1 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.12em; color: #52525b; margin-bottom: 32px; }
+    .section-title {
+      font-size: 18px; font-weight: 600; letter-spacing: 0.02em; color: #fafafa;
+      padding-bottom: 12px; border-bottom: 2px solid #3f3f46; margin-bottom: 24px; margin-top: 56px;
+    }
+    .section-title:first-of-type { margin-top: 0; }
+    .row { display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start; margin-bottom: 24px; }
+    .panel { background: #1f1f23; border: 1px solid #27272a; flex-shrink: 0; }
+    .panel-header { padding: 10px 14px; border-bottom: 1px solid #27272a; }
+    .panel-name {
+      font-size: 12px; font-weight: 600; color: #e4e4e7; text-transform: uppercase; letter-spacing: 0.06em;
+    }
+    .panel-desc {
+      font-size: 11px; color: #71717a; line-height: 1.5; margin-top: 4px;
+    }
+    .panel iframe { display: block; border: none; background: #fff; }
+    .full-panel { width: 100%; border: 2px solid #3f3f46; }
+    .full-panel .panel-header { padding: 12px 16px; background: #27272a; }
+  </style>
+</head>
+<body>
+  <h1>Just Concentrate — All States</h1>
+
+  <!-- ═══ POPUP ═══ -->
+  <div class="section-title">Popup · 360px toolbar dropdown</div>
+  <div class="row">
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-name">Idle</div>
+        <div class="panel-desc">Default state when no focus session is running. Shows armed schedule count, duration picker, and quick-block for current tab.</div>
+      </div>
+      <iframe id="popup-idle" src="/popup.html" width="360" height="540"></iframe>
+    </div>
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-name">Active Session</div>
+        <div class="panel-desc">Shown when user starts a focus session (25 min / 1 hr / 2 hr). Displays countdown timer, progress bar, blocked site count, and end-early button.</div>
+      </div>
+      <iframe id="popup-active" src="/popup.html" width="360" height="540"></iframe>
+    </div>
+  </div>
+
+  <!-- ═══ BLOCKED PAGE ═══ -->
+  <div class="section-title">Blocked Page · replaces blocked site navigation</div>
+  <div class="row">
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-name">Default</div>
+        <div class="panel-desc">Shown when user navigates to a blocked site. Displays the domain, which schedule blocked it, countdown to unlock, and a "Go Back" action.</div>
+      </div>
+      <iframe id="blocked-default" src="/blocked.html?domain=youtube.com&schedule=Work%20Focus" width="660" height="660"></iframe>
+    </div>
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-name">Escape Actions</div>
+        <div class="panel-desc">Shown when user clicks "Need to get in?" on the default blocked page. Offers three override options: snooze (5 min break), allow permanently, or end the block early. Shows weekly override count as a gentle nudge.</div>
+      </div>
+      <iframe id="blocked-escape" src="/blocked.html?domain=youtube.com&schedule=Work%20Focus" width="660" height="740"></iframe>
+    </div>
+  </div>
+  <div class="row">
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-name">Passphrase Challenge</div>
+        <div class="panel-desc">Shown when friction level is set to "passphrase" and user picks an escape action. Must re-type their commitment phrase exactly to proceed. Progress bar shows match percentage. Paste is disabled.</div>
+      </div>
+      <iframe id="blocked-passphrase" src="/blocked.html?domain=youtube.com&schedule=Work%20Focus" width="660" height="700"></iframe>
+    </div>
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-name">Cooldown</div>
+        <div class="panel-desc">Shown after passphrase is matched and user chose "end block early", or when friction is "wait" mode. A timed countdown (default 30s) forces a pause before confirming. Can cancel to stay blocked.</div>
+      </div>
+      <iframe id="blocked-cooldown" src="/blocked.html?domain=youtube.com&schedule=Work%20Focus" width="660" height="660"></iframe>
+    </div>
+  </div>
+
+  <!-- ═══ ONBOARDING ═══ -->
+  <div class="section-title">Onboarding · first-run flow · 3 steps</div>
+  <div class="row">
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-name">Step 1 — Templates</div>
+        <div class="panel-desc">Shown on first install. User picks a preset schedule (Work Focus, Bedtime, Deep Work) or starts from scratch. One click creates a schedule with bundled site lists.</div>
+      </div>
+      <iframe id="onboarding-1" src="/onboarding.html" width="660" height="660"></iframe>
+    </div>
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-name">Step 2 — Commitment Phrase</div>
+        <div class="panel-desc">After choosing a template. Optional — user sets a phrase they'll re-type to override blocks. Adds friction to make impulse overrides harder. Can skip.</div>
+      </div>
+      <iframe id="onboarding-2" src="/onboarding.html" width="660" height="600"></iframe>
+    </div>
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-name">Step 3 — Confirmation</div>
+        <div class="panel-desc">Final step. Shows what was set up: schedule count, blocked sites count, and whether a phrase is active. Links to full settings page.</div>
+      </div>
+      <iframe id="onboarding-3" src="/onboarding.html" width="660" height="600"></iframe>
+    </div>
+  </div>
+
+  <!-- ═══ OPTIONS ═══ -->
+  <div class="section-title">Options · Schedules</div>
+  <div class="panel full-panel">
+    <div class="panel-header">
+      <div class="panel-name">Schedules Tab</div>
+      <div class="panel-desc">Main settings view. Lists all blocking schedules with day pills, time ranges, type (block/blackout/redirect), and armed/paused toggles. Disabling an active schedule requires passphrase if friction is enabled.</div>
+    </div>
+    <iframe id="options-schedules" src="/options.html" width="100%" height="750" style="width: 100%;"></iframe>
+  </div>
+
+  <div class="section-title" style="margin-top: 32px;">Options · Allowed Sites</div>
+  <div class="panel full-panel">
+    <div class="panel-header">
+      <div class="panel-name">Allowed Sites Tab</div>
+      <div class="panel-desc">Global allowlist — these domains are never blocked, even during blackout mode. For essential tools like email, banking, and work apps. Keeps the list short to avoid loopholes.</div>
+    </div>
+    <iframe id="options-allowed" src="/options.html" width="100%" height="550" style="width: 100%;"></iframe>
+  </div>
+
+  <div class="section-title" style="margin-top: 32px;">Options · Usage</div>
+  <div class="panel full-panel">
+    <div class="panel-header">
+      <div class="panel-name">Usage Tab</div>
+      <div class="panel-desc">Local-only focus insights. Shows blocks, snoozes, and overrides for today and this week. Coaching nudges surface patterns (e.g. "twitter.com pulled you back 26 times this week"). All data stays on device.</div>
+    </div>
+    <iframe id="options-usage" src="/options.html" width="100%" height="550" style="width: 100%;"></iframe>
+  </div>
+
+  <div class="section-title" style="margin-top: 32px;">Options · Site Lists</div>
+  <div class="panel full-panel">
+    <div class="panel-header">
+      <div class="panel-name">Site Lists Tab</div>
+      <div class="panel-desc">Reusable collections of sites that can be attached to any schedule. Edit a list once and every schedule using it updates. Bundled presets (Social Media, News, Streaming) are created during onboarding.</div>
+    </div>
+    <iframe id="options-lists" src="/options.html" width="100%" height="550" style="width: 100%;"></iframe>
+  </div>
+
+  <div class="section-title" style="margin-top: 32px;">Options · Settings</div>
+  <div class="panel full-panel">
+    <div class="panel-header">
+      <div class="panel-name">Settings Tab</div>
+      <div class="panel-desc">Commitment phrase, friction level (none / wait / passphrase), cooldown duration, Chrome sync toggle, and data export/import.</div>
+    </div>
+    <iframe id="options-settings" src="/options.html" width="100%" height="800" style="width: 100%;"></iframe>
+  </div>
+
+</body>
+</html>
