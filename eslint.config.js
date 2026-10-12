@@ -4,7 +4,7 @@ import reactHooks from 'eslint-plugin-react-hooks';
 import react from 'eslint-plugin-react';
 
 export default [
-  { ignores: ['.output/**', '.wxt/**', 'node_modules/**', 'scripts/**'] },
+  { ignores: ['.output/**', '.wxt/**', 'node_modules/**', 'scripts/**', '.context/**', 'test-results/**'] },
   js.configs.recommended,
   {
     files: ['**/*.{js,jsx}'],
@@ -30,5 +30,10 @@ export default [
   {
     files: ['**/*.test.js'],
     languageOptions: { globals: { ...globals.node } }
+  },
+  {
+    // Playwright fixtures call `use()`, which isn't a React hook.
+    files: ['e2e/**/*.js'],
+    rules: { 'react-hooks/rules-of-hooks': 'off' }
   }
 ];

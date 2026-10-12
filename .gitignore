@@ -1,3 +1,7 @@
 .output/
 .wxt/
 node_modules/
+
+# Playwright
+test-results/
+playwright-report/
