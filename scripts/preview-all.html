@@ -54,32 +54,25 @@
     <div class="panel">
       <div class="panel-header">
         <div class="panel-name">Default</div>
-        <div class="panel-desc">Shown when user navigates to a blocked site. Displays the domain, which schedule blocked it, countdown to unlock, and a "Go Back" action.</div>
+        <div class="panel-desc">Shown when user navigates to a blocked site. Displays the site, what blocked it, a countdown to when it lifts, "Keep me focused", and the single escape action: "End block early" (friction-gated).</div>
       </div>
-      <iframe id="blocked-default" src="/blocked.html?domain=youtube.com&schedule=Work%20Focus" width="660" height="660"></iframe>
-    </div>
-    <div class="panel">
-      <div class="panel-header">
-        <div class="panel-name">Escape Actions</div>
-        <div class="panel-desc">Shown when user clicks "Need to get in?" on the default blocked page. Offers three override options: snooze (5 min break), allow permanently, or end the block early. Shows weekly override count as a gentle nudge.</div>
-      </div>
-      <iframe id="blocked-escape" src="/blocked.html?domain=youtube.com&schedule=Work%20Focus" width="660" height="740"></iframe>
+      <iframe id="blocked-default" src="/blocked.html?url=https%3A%2F%2Fyoutube.com%2Fwatch%3Fv%3Dabc123" width="660" height="660"></iframe>
     </div>
   </div>
   <div class="row">
     <div class="panel">
       <div class="panel-header">
         <div class="panel-name">Passphrase Challenge</div>
-        <div class="panel-desc">Shown when friction level is set to "passphrase" and user picks an escape action. Must re-type their commitment phrase exactly to proceed. Progress bar shows match percentage. Paste is disabled.</div>
+        <div class="panel-desc">Shown when friction is "passphrase" and the user ends a block early (or loosens an active schedule in Settings). Must re-type their commitment phrase exactly to proceed. Progress bar shows match percentage. Paste is disabled.</div>
       </div>
-      <iframe id="blocked-passphrase" src="/blocked.html?domain=youtube.com&schedule=Work%20Focus" width="660" height="700"></iframe>
+      <iframe id="blocked-passphrase" src="/blocked.html?url=https%3A%2F%2Fyoutube.com%2Fwatch%3Fv%3Dabc123" width="660" height="700"></iframe>
     </div>
     <div class="panel">
       <div class="panel-header">
         <div class="panel-name">Cooldown</div>
-        <div class="panel-desc">Shown after passphrase is matched and user chose "end block early", or when friction is "wait" mode. A timed countdown (default 30s) forces a pause before confirming. Can cancel to stay blocked.</div>
+        <div class="panel-desc">Shown after the passphrase is matched, or straight away when friction is "wait". A timed countdown (default 30s) forces a pause before confirming. Can cancel to stay blocked.</div>
       </div>
-      <iframe id="blocked-cooldown" src="/blocked.html?domain=youtube.com&schedule=Work%20Focus" width="660" height="660"></iframe>
+      <iframe id="blocked-cooldown" src="/blocked.html?url=https%3A%2F%2Fyoutube.com%2Fwatch%3Fv%3Dabc123" width="660" height="660"></iframe>
     </div>
   </div>
 

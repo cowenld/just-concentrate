@@ -1,4 +1,6 @@
-@import url('https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap');
+/* Fonts are bundled, never fetched: zero runtime network (D8). */
+@import "@fontsource-variable/geist";
+@import "@fontsource-variable/geist-mono";
 @import "tailwindcss";
 
 @theme {
@@ -24,9 +26,12 @@
   --color-warn-soft: #f7e7d6;
   --color-ok: #0a7c5a;
   --color-ok-soft: #d6efe5;
+  --color-danger: #c62828;
+  --color-danger-hover: #a51f1f;
+  --color-danger-soft: #f8dcdc;
 
-  --font-sans: 'Geist', ui-sans-serif, system-ui, -apple-system, sans-serif;
-  --font-mono: 'Geist Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  --font-sans: 'Geist Variable', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: 'Geist Mono Variable', ui-monospace, 'SF Mono', Menlo, monospace;
 
   --radius-pill: 999px;
 
@@ -101,6 +106,11 @@
     background: var(--color-warn);
     color: #fff;
   }
+  .btn-danger {
+    background: var(--color-danger);
+    color: #fff;
+  }
+  .btn-danger:hover:not(:disabled) { background: var(--color-danger-hover); }
 
   /* ── Input field ── */
   .field {

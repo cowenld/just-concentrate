@@ -1,167 +1,131 @@
 # Just Concentrate — Chrome Extension
 
-A free, privacy-respecting Manifest V3 Chrome extension that blocks distracting websites on recurring daily schedules. Fully local, zero data collection, no backend.
+A free, privacy-respecting Manifest V3 Chrome extension that blocks distracting websites on recurring daily schedules. Fully local, zero data collection, no backend, no host permissions.
 
 ## Quick Reference
 
 - **Type:** Chrome Extension (Manifest V3), built with WXT + Preact
-- **Version:** 0.1.0
+- **Version:** 0.2.0 (in `package.json`; WXT puts it in the manifest)
 - **Dev server:** `pnpm dev` — starts WXT dev server with HMR, loads extension into Chrome automatically
 - **Production build:** `pnpm build` — outputs to `.output/chrome-mv3/`
-- **Package for store:** `pnpm zip`
+- **Unit tests:** `pnpm test` (Vitest, `src/**/*.test.js`)
+- **E2E tests:** `pnpm test:e2e` — builds, then loads the real extension in Playwright Chromium (`e2e/`)
+- **Store assets:** `pnpm store:assets` — icons, promo tiles, 1280×800 screenshots (`store/`)
+- **Package for store:** `pnpm zip` — listing copy + checklist in `store/listing.md`
 - **Test in Chrome:** `chrome://extensions` → Developer mode → Load unpacked → select `.output/chrome-mv3/`
 
 ## Architecture
 
 ```
-wxt.config.ts              ← WXT config: manifest, Vite plugins (Preact, Tailwind)
+wxt.config.ts              ← WXT config: manifest, permissions, Vite plugins (Preact, Tailwind)
 src/
   entrypoints/
-    background/index.js    ← Service worker: rule evaluation, DNR, alarms, message hub
-    popup/
-      index.html           ← Toolbar popup HTML shell
-      main.jsx             ← Popup entry point
-      App.jsx              ← Popup root component
+    background/index.js    ← Service worker: refresh(), DNR rules, navigation intercept, time tracking, badge, messages
+    popup/App.jsx          ← Toolbar popup: status, Focus Now / Pomodoro, current site, quick-block
     options/
-      index.html           ← Full settings UI HTML shell
-      main.jsx             ← Options entry point
-      App.jsx              ← Options root component (5 tabs)
-      components/          ← SchedulesTab, ListsTab, AllowlistTab, UsageTab, SettingsTab, modals
+      App.jsx              ← Options root (5 tabs)
+      components/          ← SchedulesTab (+ BudgetsSection), AllowlistTab, UsageTab, ListsTab, SettingsTab, modals, EntryHint
     blocked/
-      index.html           ← Block page HTML shell
-      main.jsx             ← Blocked page entry point
-      App.jsx              ← Blocked page root component
-      components/          ← BlockedState, CooldownTimer, EscapeMenu, PassphraseChallenge
-    onboarding/
-      index.html           ← Onboarding HTML shell
-      main.jsx             ← Onboarding entry point
-      App.jsx              ← Onboarding root component
-    content-timer.js       ← Content script: floating timer overlay
+      App.jsx              ← Block page: reads ?url=, asks background getBlockInfo, end-early flow
+      components/          ← BlockedState
+    onboarding/App.jsx     ← First-run: templates, optional commitment phrase
   lib/
-    storage.js             ← Data layer: chrome.storage.local/sync abstraction
-    schedule-engine.js     ← Pure functions: time window evaluation, next-boundary calc
-    matching.js            ← Pure functions: domain matching, URL checking
-    templates.js           ← Onboarding template definitions
-  hooks/
-    useStorage.js          ← Preact hook: reactive chrome.storage access
-    useMessage.js          ← Preact hook: chrome.runtime.sendMessage wrapper
-    useCountdown.js        ← Preact hook: countdown timer logic
-  components/
-    Icon.jsx               ← Inline SVG icon helper (Lucide-style)
-    Toggle.jsx             ← Toggle switch component
-    Chip.jsx               ← Chip/tag component
-    DayPills.jsx           ← Day-of-week pill selector
-    Modal.jsx              ← Modal dialog wrapper
-    EmptyState.jsx         ← Empty state placeholder
-  assets/
-    input.css              ← Tailwind v4 source: @theme tokens + component classes
-  public/
-    icons/                 ← icon16.png, icon48.png, icon128.png
-    presets/               ← Bundled site lists: social.json, news.json, streaming.json, adult.json
-docs/design-doc.md         ← Full design document with all decisions (D1-D12)
-docs/backlog.md            ← Deferred features and known limitations
-scripts/
-  preview-all.html         ← Side-by-side UI preview (all surfaces)
-  mock-chrome.js           ← Chrome API mock for preview tooling
+    schedule-engine.js     ← Pure: windows, Pomodoro phases, budgets, computeBlockState, evaluateUrl, getBlockingSources, getNextBoundary
+    matching.js            ← Pure: domainMatches, parseEntry, entryMatchesUrl, getEffectiveBlocklist
+    dnr.js                 ← Pure: buildDnrRules(blockState) → DNR `block` rules
+    storage.js             ← Data layer: schema migration, config/usage keys, suspensions, budgets, sharded sync
+    friction.js            ← Pure: effectiveFriction, isFrictionDowngrade, is{Schedule,List,Budget}Weakened
+    tracking.js            ← Pure: time-tracking credit, formatDuration
+    coaching.js            ← Pure: usage summary + rule-based insights
+    formatting.js          ← normalizeDomain, normalizeEntry, formatEntry, time/day labels
+    importers.js           ← Own format, LeechBlock, StayFocusd (v1/v2/v4), Block Site, Cold Turkey, plain text
+    templates.js           ← Bundled presets + onboarding templates
+  hooks/                   ← useStorage, useMessage, useCountdown, useFrictionGate (renders the friction modal)
+  components/              ← Icon, DayPills, Modal, EmptyState, friction/{FrictionFlow, PassphraseChallenge, CooldownTimer}
+  test/chrome-mock.js      ← In-memory chrome.storage for unit tests
+  assets/input.css         ← Tailwind v4 source: @theme tokens + component classes; bundled Geist fonts
+  public/icons, presets/   ← Icons (16/32/48/128, generated by scripts/store-assets.mjs), bundled site lists
+e2e/                       ← Playwright: fixtures.js (extension + fake *.test sites), blocking.spec.js, ui.spec.js
+store/                     ← listing.md, promo tiles, screenshots
+docs/design-doc.md         ← Design document, decisions D1–D12 (v0.4)
+docs/backlog.md            ← What's left, known limitations, history
+docs/privacy-policy.md     ← Store privacy policy
+scripts/                   ← preview-server.js, preview-all.html, mock-chrome.js, store-assets.mjs
 ```
 
-## Data Model (src/lib/storage.js)
+## Data Model (src/lib/storage.js, schemaVersion 2)
 
-All state lives in `chrome.storage.local['justConcentrate']`:
+`chrome.storage.local['justConcentrate']` — config + runtime state (changes trigger a background refresh):
 
 ```
-schedules[]        — Array of Schedule objects (id, name, days[], startTime, endTime, blackout, adHocSites[], listIds[], enabled)
-lists[]            — Array of List objects (id, name, sites[], origin: "user"|"frozen"|"live")
-allowlist[]        — Array of domain strings (always wins over blocklist)
-settings           — { frictionLevel, passphrase, theme, syncEnabled, cooldownSeconds, snoozeDurationMinutes, onboardingComplete }
-focusSession       — Active focus session or null (duration, endTime, blackout, domains)
-usage              — { blockCounts, escapeCounts, snoozeCounts, siteTime } keyed by "domain|YYYY-MM-DD"
-commitmentEndTimes — { scheduleId: timestamp } for resume-on-re-enable
+schemaVersion      — 2 (migrateData() upgrades v1 data on read)
+schedules[]        — { id, name, days[], startTime, endTime, blackout, action: "block"|"redirect", redirectUrl, adHocSites[], listIds[], enabled }
+lists[]            — { id, name, sites[], origin: "user"|"frozen"|"live", presetKey? }
+allowlist[]        — domain strings (always wins)
+budgets[]          — { id, domain, minutes, enabled } daily time limits
+settings           — { frictionLevel: "none"|"wait"|"passphrase", passphrase, cooldownSeconds, syncEnabled, onboardingComplete, trackTime, blockPageMessage, blockPageCss }
+focusSession       — { startTime, endTime, blackout, domains[], pomodoro?: { workMinutes, breakMinutes, cycles } } or null
+suspensions        — { "schedule:<id>" | "budget:<id>": untilTimestamp } set by "end block early"
 ```
 
-## How Blocking Works (Three Layers)
+Other keys: `justConcentrateUsage` = `{ blockCounts, escapeCounts, siteTime }` keyed `"host|YYYY-MM-DD"` (local date; siteTime in seconds; 30-day retention; never synced). `_blockState` = cached `computeBlockState()` output + `dataUpdatedAt`. `justConcentrateDismissed` = dismissed insight ids. Session storage: `_initialized`, `_track`.
 
-1. **DNR rules** (`chrome.declarativeNetRequest`) — redirect matched URLs to `blocked.html`
-2. **Navigation intercept** (`chrome.webNavigation.onCommitted`) — catches redirects DNR misses
-3. **Cached block state** (`_blockState` in storage) — fast lookup for blocked page
+Blocklist entries are strings: `reddit.com` (domain + subdomains), `linkedin.com/feed` (path + sub-paths), `keyword:poker` (any URL containing it). Normalize user input with `normalizeEntry()`; allowlist uses `normalizeDomain()`.
 
-`src/entrypoints/background/index.js:updateBlockingRules()` is the main orchestrator — called when schedules change, alarms fire, or focus sessions start/end.
+## How Blocking Works
 
-## Message Protocol (chrome.runtime.sendMessage)
+1. **DNR `block` rules** (`lib/dnr.js`) — stop matching top-level requests. Redirect rules are NOT used: they'd need host permissions.
+2. **`webNavigation.onErrorOccurred`** — turns `ERR_BLOCKED_BY_CLIENT` into `tabs.update` to `blocked.html?url=<encoded>` (or the schedule's redirect URL).
+3. **`onCommitted` / `onHistoryStateUpdated`** — fallback + SPA route changes (path entries).
 
-Messages from popup/options/blocked → background:
+`background/index.js:refresh()` is the orchestrator: prune expired suspensions/focus → `computeBlockState()` → replace DNR rules → write `_blockState` → recheck all open tabs → set the boundary alarm → update badge. `requestRefresh()` serializes and coalesces calls; it's idempotent, so the background's own storage writes may trigger it again safely. A 1-minute `jc-tick` alarm flushes time tracking and the badge.
 
-| type | purpose | sender |
-|------|---------|--------|
-| `getBlockStatus` | current block state | popup |
-| `startFocus` | begin focus session | popup |
-| `endFocus` | cancel focus session | popup |
-| `refreshRules` | force re-evaluation | options, popup, onboarding |
-| `snooze` | temporarily unblock domain | blocked |
-| `allowPermanently` | add to allowlist | blocked |
-| `endBlockEarly` | disable schedule until next window | blocked |
-| `getSettings` | return current settings | blocked |
+## Message Protocol (chrome.runtime.sendMessage → background)
+
+| type | payload | purpose | sender |
+|------|---------|---------|--------|
+| `refreshRules` | — | force refresh | options, popup, onboarding |
+| `getBlockInfo` | `{ url }` | `{ match }` from evaluateUrl | blocked |
+| `startFocus` | `{ duration \| pomodoro, blackout, domains }` | begin focus session | popup |
+| `endFocus` | — | end focus session (after friction) | blocked (`?action=endFocus`) |
+| `endBlockEarly` | `{ url }` | suspend everything blocking the URL until it would end | blocked |
 
 ## Key Design Decisions
 
 - **D1:** Self-control commitment device, not security enforcement
-- **D3:** Single global allowlist — always wins, keeps email/banking reachable in blackout
-- **D5:** Friction off by default, opt-in. Three levels: none / wait / passphrase
-- **D6:** Domain-level matching only (v1). Subdomains auto-matched. Path-level deferred to P2
-- **D8:** Zero runtime network. No network permission in manifest. Presets bundled
-- **D10:** Passphrase = user's own reason. Exact match, paste disabled
-- **D11:** Sync is config-only (last-write-wins). Usage stays local
-
-## Domain Matching (src/lib/matching.js)
-
-- Matches registrable domain + all subdomains
-- `reddit.com` blocks `reddit.com`, `www.reddit.com`, `old.reddit.com`
-- Normalization: lowercase, strip `www.` prefix
-- Allowlist checked first (always wins)
-
-## Schedule Engine (src/lib/schedule-engine.js)
-
-- Time windows support midnight-crossing (e.g., 22:00–07:00)
-- `days[]` uses 0=Sun through 6=Sat (empty = every day)
-- `getNextWindowBoundary()` returns minutes until nearest schedule start/end (max 60)
-- Blackout mode = block everything except allowlist
+- **D3:** Single global allowlist — always wins (excluded from every DNR rule)
+- **D5:** Friction levels none / wait / passphrase, **default wait**. Every *weakening* action on something active passes friction (`useFrictionGate` + `lib/friction.js`); strengthening is free
+- **D6:** Domain entries by default; path and keyword entries are "advanced". In-page blocking deferred
+- **D8:** Zero runtime network, no host permissions. Presets and fonts bundled
+- **D10:** Passphrase = user's own reason. Exact match, paste disabled, changing it requires the current one
+- **D11:** Sync is config-only (last-write-wins), sharded across `justConcentrateSync.N` items
+- Block page has one escape: **End block early** (snooze / allow-permanently were cut)
 
 ## Coding Conventions
 
-- **Preact + JSX** — UI components use `.jsx` extension with Preact hooks (`useState`, `useEffect`, etc.)
-- **ES modules** — use `import`/`export` in all source files; no script-tag globals
-- **CSS class attribute** — use `class` (not `className`) in Preact JSX (Preact convention)
-- **Tailwind CSS v4** — utility classes in JSX, component classes in `src/assets/input.css`; Vite rebuilds CSS automatically (no manual `npm run build` for CSS)
-- Design tokens defined via `@theme` in `src/assets/input.css` — do not hardcode colors/fonts
-- Storage access via `src/lib/storage.js` helpers, never raw `chrome.storage` API
-- Icons via `<Icon name="..." size={...} />` component from `src/components/Icon.jsx`
-- Shared UI primitives (Toggle, Chip, DayPills, Modal, EmptyState) in `src/components/`
-- Async message handlers in background wrapped in `.catch()` to avoid service worker crashes
-- `isUpdatingRules` guard in background prevents re-entrant storage listener loops
+- **Preact + JSX** — UI components use `.jsx` with Preact hooks
+- **ES modules** everywhere; **`class`** not `className`
+- **Tailwind CSS v4** — utilities in JSX, component classes (`btn`, `btn-danger`, `field`, `chip`, `callout`, `toggle`) in `src/assets/input.css`; tokens via `@theme`, don't hardcode colors/fonts
+- Storage access via `src/lib/storage.js` helpers, never raw `chrome.storage` in UI code
+- Keep logic in pure `lib/` functions with Vitest tests; entrypoints stay thin
+- Icons via `<Icon name="..." size={...} />`
+- Background message handlers return promises; unknown message types return `false`
 
 ## Common Tasks
 
-**Add a new escape action on the block page:** Add a new component or button in `src/entrypoints/blocked/components/EscapeMenu.jsx`, add handler in `src/entrypoints/blocked/App.jsx`, add message type in `src/entrypoints/background/index.js` message listener.
+**Change what gets blocked:** `lib/schedule-engine.js:computeBlockState()` (+ `evaluateUrl`, `getBlockingSources`), rules in `lib/dnr.js`. Add unit tests, then an e2e case in `e2e/blocking.spec.js`.
 
-**Add a new setting:** Add default to `src/lib/storage.js:DEFAULT_DATA.settings`, add UI in `src/entrypoints/options/components/SettingsTab.jsx`, read in whichever component needs it.
+**Gate a new weakening action:** `const { gate, frictionModal } = useFrictionGate();` → `gate({ title, description, confirmLabel }, doIt)`, render `{frictionModal}`. Add a pure `isXWeakened` check in `lib/friction.js` if needed.
 
-**Add a new preset:** Create `src/public/presets/name.json` with `{name, origin: "frozen", sites: [...]}`, add to `wxt.config.ts` web_accessible_resources, reference in `src/lib/templates.js`.
+**Add a new setting:** default in `storage.js:DEFAULT_SETTINGS`, UI in `SettingsTab.jsx`. Bump `SCHEMA_VERSION` + `migrateData()` only if existing data must change shape.
 
-**Modify blocking logic:** Core is in `src/entrypoints/background/index.js:updateBlockingRules()` and `src/lib/schedule-engine.js:getActiveBlockedDomains()`.
+**Add a new preset:** `src/public/presets/name.json` with `{name, origin: "frozen"|"live", sites: [...]}`, add the key to `PRESETS` in `src/lib/templates.js` (no web_accessible_resources needed).
 
-**Add a shared UI component:** Create `src/components/MyComponent.jsx`, import it in the entrypoint that needs it.
-
-**Add a Preact hook:** Create `src/hooks/useMyHook.js`, import it in the component that needs it.
+**Add an importer:** parser in `lib/importers.js` returning `{ source, lists, schedules?, budgets?, allowlist, settings? }`, register in `IMPORT_FORMATS` + `autoDetectAndParse`, test in `importers.test.js`.
 
 ## Preview UI
 
-The side-by-side preview shows all extension surfaces at realistic sizes. Builds automatically if needed:
-
-```bash
-pnpm preview
-```
-
-This starts a local server at `http://localhost:3210` that serves the build output with `mock-chrome.js` injected into each page. Chrome APIs are stubbed with test data so the UI renders outside the extension context. For full functional testing, load the unpacked extension at `chrome://extensions` → `.output/chrome-mv3/`.
+`pnpm preview` serves the build at `http://localhost:3210` with `scripts/mock-chrome.js` (v2 data model) injected. For functional testing use the e2e suite or load the unpacked extension.
 
 ## Git & GitHub
 
@@ -170,9 +134,10 @@ This starts a local server at `http://localhost:3210` that serves the build outp
 
 ## Known Gotchas
 
-- `src/entrypoints/background/index.js` is a Manifest V3 service worker — it can be terminated by Chrome at any time. All state must be in `chrome.storage`, not in-memory variables (except transient `isUpdatingRules` flag).
-- The blocked page runs in an extension page context, not a content script — it can use `chrome.runtime.sendMessage` but not access the blocked page's DOM.
-- Sync payload has 8KB quota per item — Settings shows a warning at 75% and an error at 100%. Payload sharding across multiple keys is a backlog item for extreme cases.
-- Schedule times are "HH:MM" strings compared lexicographically for midnight-crossing detection.
-- WXT generates `manifest.json` from `wxt.config.ts` — do not create a root-level `manifest.json`.
-- CSS is compiled by Vite/Tailwind at build time — do not commit a root-level `styles.css`.
+- The background is an MV3 service worker — it can be terminated any time. All state lives in storage; in-memory maps (redirect/block dedup, refresh queue) are transient only.
+- Re-enable / restart doesn't fire `onStartup`; the top-level `_initialized` session-flag check re-applies rules and alarms.
+- DNR redirect actions need host permissions — keep using `block` + the navigation-error redirect.
+- `blocked.html` is not web-accessible and doesn't need to be (it's reached via `tabs.update`).
+- Usage writes go to `justConcentrateUsage`, not the config key — writing usage into config would rebuild rules and burn sync write quota.
+- Schedule times are "HH:MM"; an end of `23:59` means end of day. The after-midnight part of an overnight window belongs to the previous day's `days[]`.
+- WXT generates `manifest.json` from `wxt.config.ts` — don't add a root-level `manifest.json` or `styles.css`.

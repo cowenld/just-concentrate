@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  extractRegistrableDomain, domainMatches, getEffectiveBlocklist
+  extractRegistrableDomain, domainMatches, getEffectiveBlocklist, parseEntry, entryMatchesUrl
 } from './matching.js';
 
 describe('extractRegistrableDomain', () => {
@@ -47,5 +47,48 @@ describe('getEffectiveBlocklist', () => {
   it('ignores unknown list ids and missing fields', () => {
     expect(getEffectiveBlocklist({ listIds: ['nope'] }, lists)).toEqual([]);
     expect(getEffectiveBlocklist({}, lists)).toEqual([]);
+  });
+});
+
+describe('parseEntry', () => {
+  it('classifies domain, path and keyword entries', () => {
+    expect(parseEntry('reddit.com')).toEqual({ type: 'domain', domain: 'reddit.com' });
+    expect(parseEntry('linkedin.com/feed')).toEqual({ type: 'path', domain: 'linkedin.com', path: '/feed' });
+    expect(parseEntry('youtube.com/shorts/x')).toEqual({ type: 'path', domain: 'youtube.com', path: '/shorts/x' });
+    expect(parseEntry('keyword:casino')).toEqual({ type: 'keyword', keyword: 'casino' });
+  });
+});
+
+describe('entryMatchesUrl', () => {
+  const u = s => new URL(s);
+  it('matches domains and subdomains', () => {
+    expect(entryMatchesUrl('reddit.com', u('https://old.reddit.com/r/all'))).toBe(true);
+    expect(entryMatchesUrl('reddit.com', u('https://notreddit.com/'))).toBe(false);
+  });
+  it('matches a path and its sub-paths only', () => {
+    expect(entryMatchesUrl('linkedin.com/feed', u('https://www.linkedin.com/feed'))).toBe(true);
+    expect(entryMatchesUrl('linkedin.com/feed', u('https://www.linkedin.com/feed/'))).toBe(true);
+    expect(entryMatchesUrl('linkedin.com/feed', u('https://www.linkedin.com/feed/update/1?x=1'))).toBe(true);
+    expect(entryMatchesUrl('linkedin.com/feed', u('https://www.linkedin.com/feedback'))).toBe(false);
+    expect(entryMatchesUrl('linkedin.com/feed', u('https://www.linkedin.com/messaging'))).toBe(false);
+    expect(entryMatchesUrl('youtube.com/shorts', u('https://m.youtube.com/Shorts/abc'))).toBe(true);
+  });
+  it('matches keywords anywhere in the URL, case-insensitively', () => {
+    expect(entryMatchesUrl('keyword:casino', u('https://www.google.com/search?q=Casino+near+me'))).toBe(true);
+    expect(entryMatchesUrl('keyword:casino', u('https://example.com/'))).toBe(false);
+  });
+});
+
+describe('getEffectiveBlocklist with advanced entries', () => {
+  it('keeps path and keyword entries intact', () => {
+    const schedule = { adHocSites: ['www.LinkedIn.com/feed', 'keyword:casino'] };
+    expect(getEffectiveBlocklist(schedule, []).sort()).toEqual(['keyword:casino', 'linkedin.com/feed']);
+  });
+});
+
+describe('entryMatchesUrl with encoded entries', () => {
+  it('matches percent-encoded keyword and path entries', () => {
+    expect(entryMatchesUrl('keyword:caf%c3%a9', new URL('https://www.google.com/search?q=café'))).toBe(true);
+    expect(entryMatchesUrl('de.wikipedia.org/wiki/caf%c3%a9', new URL('https://de.wikipedia.org/wiki/Café'))).toBe(true);
   });
 });

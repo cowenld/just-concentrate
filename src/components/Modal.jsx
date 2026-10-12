@@ -3,7 +3,7 @@ export function Modal({ visible, onClose, title, children }) {
 
   return (
     <div
-      class="fixed inset-0 bg-black/40 z-50 flex items-start justify-center pt-16 px-4"
+      class="fixed inset-0 bg-black/40 z-[200] flex items-start justify-center pt-16 px-4"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div class="bg-bg w-full max-w-xl border border-rule shadow-pop">

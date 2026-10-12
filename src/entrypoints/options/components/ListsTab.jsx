@@ -1,9 +1,12 @@
 import { useState, useEffect } from 'preact/hooks';
-import { getLists, getSchedules, deleteList } from '../../../lib/storage.js';
+import { getLists, getSchedules, deleteList, getData } from '../../../lib/storage.js';
+import { isScheduleInForce } from '../../../lib/schedule-engine.js';
+import { useFrictionGate } from '../../../hooks/useFrictionGate.jsx';
 import { PRESETS, loadPresets, addPresetList } from '../../../lib/templates.js';
 import { Icon } from '../../../components/Icon.jsx';
 import { Modal } from '../../../components/Modal.jsx';
 import { ListModal } from './ListModal.jsx';
+import { formatEntry } from '../../../lib/formatting.js';
 
 export function ListsTab() {
   const [lists, setLists] = useState([]);
@@ -13,22 +16,47 @@ export function ListsTab() {
   const [showPresets, setShowPresets] = useState(false);
   const [presets, setPresets] = useState({});
   const [presetsLoaded, setPresetsLoaded] = useState(false);
+  const [suspensions, setSuspensions] = useState({});
+  const { gate, frictionModal } = useFrictionGate();
 
   useEffect(() => {
     refresh();
   }, []);
 
   async function refresh() {
-    const [l, s] = await Promise.all([getLists(), getSchedules()]);
+    const [l, s, d] = await Promise.all([getLists(), getSchedules(), getData()]);
     setLists(l);
     setSchedules(s);
+    setSuspensions(d.suspensions);
+  }
+
+  // A list is "in force" if a schedule using it is blocking right now.
+  const listInForce = list => schedules.some(s =>
+    (s.listIds || []).includes(list.id) && !s.blackout && isScheduleInForce(s, suspensions));
+
+  async function removeList(list) {
+    await deleteList(list.id);
+    chrome.runtime.sendMessage({ type: 'refreshRules' });
+    refresh();
+  }
+
+  function handleDelete(list) {
+    if (listInForce(list)) {
+      gate({
+        title: 'Delete list',
+        description: `“${list.name}” is used by a schedule that's blocking right now. This deletes it and detaches it from every schedule.`,
+        confirmLabel: 'Delete',
+        destructive: true
+      }, () => removeList(list));
+      return;
+    }
+    setDeletingList(list);
   }
 
   async function confirmDelete() {
     if (!deletingList) return;
-    await deleteList(deletingList.id);
+    await removeList(deletingList);
     setDeletingList(null);
-    refresh();
   }
 
   async function togglePresets() {
@@ -108,13 +136,16 @@ export function ListsTab() {
                   <span class="text-[15px] font-semibold text-ink">{l.name}</span>
                   <div class="flex gap-1 items-center">
                     <button class="icon-btn" onClick={() => setEditingList(l)} title="Edit"><Icon name="pencil" size={14} /></button>
-                    <button class="icon-btn" onClick={() => setDeletingList(l)} title="Delete"><Icon name="trash" size={14} /></button>
+                    <button class="icon-btn" onClick={() => handleDelete(l)} title="Delete"><Icon name="trash" size={14} /></button>
                   </div>
                 </div>
-                <div class="mono-cap mb-2">{l.sites.length} SITES · {usedStr.toUpperCase()}</div>
+                <div class="mono-cap mb-2">
+                  {l.sites.length} SITES · {usedStr.toUpperCase()}
+                  {l.origin === 'live' && <span class="chip chip-accent h-[18px] px-1.5 text-[9px] ml-2">LIVE</span>}
+                </div>
                 <div class="flex flex-wrap gap-1">
                   {l.sites.map(s => (
-                    <span key={s} class="chip chip-muted text-[10px] h-[20px] px-2">{s}</span>
+                    <span key={s} class="chip chip-muted text-[10px] h-[20px] px-2">{formatEntry(s)}</span>
                   ))}
                 </div>
               </div>
@@ -141,9 +172,10 @@ export function ListsTab() {
         </p>
         <div class="flex justify-end gap-3">
           <button class="btn btn-outline" onClick={() => setDeletingList(null)}>Cancel</button>
-          <button class="btn bg-red-600 text-white hover:bg-red-700" onClick={confirmDelete}>Delete</button>
+          <button class="btn btn-danger" onClick={confirmDelete}>Delete</button>
         </div>
       </Modal>
+      {frictionModal}
     </section>
   );
 }

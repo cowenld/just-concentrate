@@ -1,7 +1,9 @@
 # Project Design Document — Website Blocker (Chrome Extension)
 
-**Status:** Draft v0.3 · **Date:** 9 June 2026 · **Type:** Manifest V3 browser extension
+**Status:** v0.4 · **Date:** 12 October 2026 · **Type:** Manifest V3 browser extension
 
+> **Changes in v0.4 (built in v0.2.0 of the extension):** the block moment has a **single escape, "End block early"** (snooze and allow-permanently dropped); friction defaults to a **cooldown** (D5 revised); the blocking engine uses **DNR `block` rules + a navigation-error redirect** so it needs no host permissions (§12); "end early" **suspends** a schedule until its window ends instead of disabling it; the floating on-page timer became a **toolbar badge countdown**; P2 shipped: **path + keyword entries, daily time budgets, Pomodoro, custom block page, StayFocusd import**; config **sync is sharded** across items.
+>
 > **Changes in v0.3:** full design of the **block moment** (block page + escape valve + passphrase); **onboarding & empty states**; the **schedule editor** anatomy; **coaching** locked as rule-based and fully local (no LLM); **category lists bundled** for zero runtime network; scope dispositions for sync, import/export and the sweep items. Competitive research (§15) unchanged.
 
 ---
@@ -20,8 +22,8 @@ The wedge in a crowded free market is three things competitors don't combine: **
 | D2 | Blocklist model | Not one global list. Sites live **inside schedules** as ad-hoc entries and/or via reusable **Lists**. |
 | D3 | Allowlist | One **global** allowlist, always wins; also powers a "block everything except these" blackout mode. |
 | D4 | Presets | **Bundled in the extension.** "Live" tracks the bundled copy (refreshes on extension update); "frozen" is a forked, editable copy. No runtime fetch. |
-| D5 | Friction | Off by default, opt-in, self-imposed. Resume-on-re-enable + recursive typing challenge + cooling-off countdown for teardown. Flat cost (no escalation). Honest copy. |
-| D6 | Matching | **Domain-level for v1** (registrable domain + all subdomains). Wildcards behind "advanced". Path/in-page deferred. |
+| D5 | Friction | Self-imposed, three levels: none / wait / passphrase. **Default is "wait"** (a cooldown; revised in v0.4, was "off" — an instant one-click unblock made the default product a no-op). Passphrase is opt-in with the user's own words. Resume-on-re-enable + recursive typing challenge + cooling-off countdown for teardown. Weakening anything active (turning off/editing an active schedule, removing sites from an active list, raising a budget, allowing a site mid-block, lowering friction) passes friction; strengthening is always free. Flat cost (no escalation). Honest copy. |
+| D6 | Matching | Domain entries (registrable domain + all subdomains) by default; `*.x.com` is the same as `x.com`. "Advanced" entries: **paths** (`linkedin.com/feed`) and **keywords** (`keyword:poker`). In-page element blocking still deferred. |
 | D7 | IA | Four sections — Schedules · Allowed sites · Usage · Settings — plus a popup, the block page, and onboarding. |
 | D8 | Privacy | **Zero runtime network** (lists bundled). No network/host permission. Open-source. |
 | D9 | Coaching | Rule-based + templated, fully local. **No LLM, no external data** — not even earmarked for later. |
@@ -102,17 +104,17 @@ A live plain-English summary line builds as you type (matches the card), and an 
 
 ### 6.3 The block moment
 The block page names the schedule that caught you, shows the site, shows **when it lifts** (live countdown / "back at 17:00"), in a calm tone that reminds you *you* set this — no shaming. Three escape actions, each a different cost (scaled to the chosen friction level; passphrase level shown):
-- **Snooze (5 min)** — type the passphrase once → 5 minutes' access. No cooldown; small and self-reversing.
-- **Allow this site permanently** — adds it to the global allowlist (genuine false positives). Friction-gated.
-- **End the block early** — type the passphrase once **+ a cooling-off countdown** (~30s default, configurable) stating what turns off and until when, with a "keep me focused / cancel" option during it. The pause is where people reconsider.
+**Decision (v0.4): one escape action only — "End block early".** Snooze and "allow permanently" were cut: snooze invited repeated five-minute dips, and false positives are better fixed calmly in the Allowed sites tab (which is itself friction-gated while a block is active).
+- **End block early** — passes the user's friction level (phrase → cooling-off countdown, or countdown only, or a plain confirm) stating what turns off and until when, with a "keep me focused" option throughout. The pause is where people reconsider. It lifts *everything* blocking that URL until it would have ended anyway: schedules are **suspended until their window ends** (they resume on their own next window), a daily budget is lifted until midnight, a focus session ends.
+- **Keep me focused** — leaves for a new tab. When the countdown reaches zero the page returns to the URL that was blocked.
 
-In **redirect** mode there's no page to host buttons, so overrides move to the popup. Wellbeing line: friction should help the user honour their own intention, never trap or shame; a real exit always exists — it just costs enough to make you pause.
+In **redirect** mode there's no page to host buttons; to override, the user turns the schedule off in the options page (friction-gated). A custom message and CSS can be set for the block page (Settings → Block page). Wellbeing line: friction should help the user honour their own intention, never trap or shame; a real exit always exists — it just costs enough to make you pause.
 
 ## 7. Friction & bypass-resistance (honest by design)
 
 No consumer extension can stop itself being disabled at `chrome://extensions`, nor cover other browsers/profiles/Incognito. Friction's job is to defeat the **impulse**, not a sustained choice. **Off by default, opt-in, self-imposed**, with a configurable level (none / short wait / passphrase; passphrase is the strong default given the product's purpose). Mechanisms:
 
-1. **Resume-on-re-enable.** Commitment end-times persist to storage and are re-checked on startup, so toggling the extension off and on **doesn't clear an active lock** — it resumes for the time left. Kills the "flick off, flick on" bypass.
+1. **Resume-on-re-enable.** All state (schedules, suspensions, focus sessions) lives in storage, and the service worker re-applies rules and alarms on its first wake-up after any restart, update, or disable/enable (a `chrome.storage.session` flag detects this). Toggling the extension off and on **doesn't clear an active block** — it resumes for the time left. Kills the "flick off, flick on" bypass.
 2. **The passphrase = the user's own reason** (D10). Set once in Settings; shown as reference text on the block page (typing-test style with progress); **exact match** (case + punctuation) is the friction; **paste disabled** or the whole thing is theatre; **recursive** — changing it in Settings requires typing the current one, closing the back door.
 3. **Flat cost, no escalation** — a paragraph per snooze is already self-limiting.
 
@@ -120,15 +122,18 @@ No consumer extension can stop itself being disabled at `chrome://extensions`, n
 
 ## 8. Matching semantics
 
-- **v1 is domain-level**: a site entry matches its registrable domain + all subdomains.
-- **Wildcards** (`*.x.com`) sit behind an "advanced" affordance.
-- **Path-level** (`linkedin.com/feed`) and **in-page** (YouTube Shorts vs normal videos) are **deferred** — they need a content script watching client-side route changes and are the fragile part of every competitor.
-- **Engine note:** domain-level blocking via `declarativeNetRequest` blocks the *request*, not the rendered page, so it is **SPA-proof**. We only inherit single-page-app complexity if/when we add path/in-page.
+- **Domain entries** (`reddit.com`) match the registrable domain + all subdomains. `*.x.com` is normalized to `x.com`. Internationalized names are stored as punycode.
+- **Path entries** (`linkedin.com/feed`, `youtube.com/shorts`) match that path and its sub-paths on the domain and its subdomains — `/feed`, `/feed/123`, not `/feedback`. Case-insensitive.
+- **Keyword entries** (`keyword:poker`) match any URL containing the word (including search queries). They match the URL only, never page content.
+- The **allowlist** is domain-only and always wins, including over subdomains of blocked domains.
+- **Engine note:** DNR rules block the *request*, so domain and keyword entries are SPA-proof. Path entries also need `webNavigation.onHistoryStateUpdated`, which catches client-side route changes **without a content script or host permission**.
+- **In-page** blocking (hiding YouTube Shorts shelves inside normal pages) is still deferred: it needs a content script on every page, i.e. host permissions, which conflicts with D8's minimal-permission posture. Path entries cover the common cases (`youtube.com/shorts`, `linkedin.com/feed`).
 
 ## 9. Usage & coaching (local-only, no model)
 
 Two on-device layers; **no LLM, no external data** (D9) — routing browsing behaviour through a model would break the one promise the product is built on.
-- **Dashboard** — per-site time, block counts, escape-valve use, focus sessions; stored locally. Plus an optional floating on-page countdown during an active session.
+- **Dashboard** — per-site time (active tab, window focused, user not idle; 30-day retention; can be turned off), block counts, overrides; stored locally. A focus session shows its countdown on the **toolbar badge** (v0.4: replaces the floating on-page timer, which needed `<all_urls>` host access).
+- **Daily time budgets** — "15 minutes of reddit.com a day", any time of day; once used up the site is blocked until midnight.
 - **Coaching** — each nudge is a **threshold on a local counter + a pre-written template** with the numbers filled in (e.g. `if blockCount(site, schedule, 7d) >= 10 → "{site} pulled you back {n} times during {schedule} this week"` + a one-tap "add a pause"). A dozen such rules cover most of the value; rotate phrasings so it doesn't read robotically.
 
 Discipline: framed around the user's goal, **leads with wins, never a failure count**; tunable (full / wins-only / off); individually dismissible. **Pull, not push** by default — it lives in the Usage tab and waits to be visited; no real-time "you're slipping" popups. Soft progress framing over brittle streak counters (which shame when broken). Generative/conversational coaching is out of scope entirely.
@@ -149,13 +154,18 @@ Discipline: framed around the user's goal, **leads with wins, never a failure co
 - **Onboarding** (templates + Custom) and empty-state reuse.
 - **Bundled presets** (frozen starters: Social, News, Streaming).
 - **Friction stack** (§7): resume-on-re-enable, recursive passphrase, teardown cooldown; configurable level (none / wait / passphrase).
-- **Block-moment escape actions** (snooze / allow / end early).
+- **Block-moment escape action** ("End block early"; snooze/allow cut in v0.4).
 - **Usage dashboard + coaching** (rule-based).
 - **Redirect** action; **popup**; **JSON export/import** (own format).
 - Optional **cross-device sync** via Chrome's built-in `chrome.storage.sync` — config-only, last-write-wins.
 
-### 11.3 Future features
-See `docs/backlog.md` for the full list of unbuilt features, including items originally scoped as P1 (partial) and P2.
+### 11.3 P2 ✅ (v0.2.0) — except in-page blocking
+- **Path-level** and **keyword** entries (advanced), wildcard normalization.
+- **Per-site daily time budgets**, backed by local active-tab time tracking.
+- **Pomodoro** focus sessions (work/break cycles; sites unblock during breaks).
+- **Custom block page** message + CSS.
+- **Competitor import**: LeechBlock NG, StayFocusd (v1/v2/v4 formats), Block Site, Cold Turkey, plain text.
+- Not built: **in-page blocking** (see §8). Remaining work lives in `docs/backlog.md`.
 
 ### 11.4 Out of scope
 - Mobile sync + apps; OS-level/cross-browser enforcement; truly unbypassable blocking beyond the force-install footnote; server-side analytics/telemetry; **any LLM/generative coaching**; accounts/auth/billing.
@@ -163,11 +173,15 @@ See `docs/backlog.md` for the full list of unbuilt features, including items ori
 ## 12. Technical architecture
 
 - **Manifest V3.**
-- **Blocking engine — hybrid:** `declarativeNetRequest` dynamic rules for domain-level network blocking + redirect; a `tabs.onUpdated`/`webNavigation` listener evaluates the active schedule/Focus window *at navigation time* and redirects to `blocked.html`. `chrome.alarms` toggles rulesets at window boundaries **and re-evaluates already-open tabs** so a tab on a now-blocked site is cut over, not just the next navigation.
+- **Blocking engine — hybrid, no host permissions:**
+  1. `declarativeNetRequest` dynamic **`block`** rules stop matching top-level requests before they leave the browser (one `requestDomains` rule for domains, a regex rule per path, a `urlFilter` rule per keyword, one catch-all for blackout; the allowlist is `excludedRequestDomains` on every rule). DNR *redirect* rules would need host permissions, so they're deliberately not used.
+  2. `webNavigation.onErrorOccurred` turns the resulting `ERR_BLOCKED_BY_CLIENT` into a redirect to `blocked.html?url=…` (or the schedule's redirect URL).
+  3. `onCommitted` + `onHistoryStateUpdated` catch anything the rules missed (rule-update races, SPA route changes for path entries).
+  All three read a cached block state computed by one pure function (`computeBlockState`). `chrome.alarms` fires at the next boundary (schedule edge, Pomodoro phase, suspension end, midnight for budgets) **and re-evaluates already-open tabs**, so a tab on a now-blocked site is cut over, not just the next navigation.
 - **Persisted state** (never worker memory, which spins down): schedules, lists, allowlist, settings, commitment/lock end-times, usage counters — all in `chrome.storage`.
-- **Storage:** `chrome.storage.local` for everything; optional `chrome.storage.sync` for **config only** (schedules/lists/allowlist/settings — small; bundled lists don't count; usage stays local; last-write-wins; mind ~100KB/8KB-per-item quota).
+- **Storage:** `chrome.storage.local` — config + runtime state under one key, usage counters under a separate key (so frequent usage writes never trigger rule rebuilds or sync writes). Optional `chrome.storage.sync` for **config only** (schedules/lists/allowlist/budgets/settings; usage stays local; last-write-wins), **sharded** across items to fit the 8KB-per-item quota (~100KB total), written only when the payload changes.
 - **Lists:** bundled assets, no fetch.
-- **Permissions (minimal, no network):** `declarativeNetRequest`, `storage`, `alarms`, `tabs`/`webNavigation`, host permissions only as needed (or `activeTab`).
+- **Permissions (minimal, no network, no host permissions):** `declarativeNetRequest`, `storage`, `alarms`, `tabs`, `webNavigation`, `idle`. Fonts and preset lists are bundled; nothing is fetched at runtime.
 - **No backend.**
 
 ## 13. Build-time decisions (deferred — none block starting)

@@ -1,7 +1,11 @@
 import { useState, useEffect, useRef } from 'preact/hooks';
-import { saveSchedule, getSchedules, getLists } from '../../../lib/storage.js';
+import { saveSchedule, getData, getLists } from '../../../lib/storage.js';
+import { isScheduleInForce } from '../../../lib/schedule-engine.js';
 import { DayPills } from '../../../components/DayPills.jsx';
-import { normalizeDomain } from '../../../lib/formatting.js';
+import { normalizeEntry, formatEntry } from '../../../lib/formatting.js';
+import { isScheduleWeakened } from '../../../lib/friction.js';
+import { useFrictionGate } from '../../../hooks/useFrictionGate.jsx';
+import { EntryHint } from './EntryHint.jsx';
 
 function ListPicker({ lists, onSelect }) {
   const [open, setOpen] = useState(false);
@@ -58,6 +62,8 @@ export function ScheduleModal({ schedule, onClose, onSaved }) {
   const [siteInput, setSiteInput] = useState('');
   const [listIds, setListIds] = useState([]);
   const [allLists, setAllLists] = useState([]);
+  const [siteError, setSiteError] = useState('');
+  const { gate, frictionModal } = useFrictionGate();
 
   useEffect(() => {
     getLists().then(setAllLists);
@@ -80,9 +86,15 @@ export function ScheduleModal({ schedule, onClose, onSaved }) {
   }, [schedule]);
 
   function addSite() {
-    const val = normalizeDomain(siteInput);
-    if (val && !sites.includes(val)) setSites([...sites, val]);
+    if (!siteInput.trim()) return;
+    const val = normalizeEntry(siteInput);
+    if (!val) {
+      setSiteError(`“${siteInput.trim()}” isn't a domain, path or keyword: entry.`);
+      return;
+    }
+    if (!sites.includes(val)) setSites([...sites, val]);
     setSiteInput('');
+    setSiteError('');
   }
 
   function removeSite(i) { setSites(sites.filter((_, idx) => idx !== i)); }
@@ -97,7 +109,7 @@ export function ScheduleModal({ schedule, onClose, onSaved }) {
     if (!startTime || !endTime) return false;
     const [sH, sM] = startTime.split(':').map(Number);
     const [eH, eM] = endTime.split(':').map(Number);
-    return (eH * 60 + eM) <= (sH * 60 + sM);
+    return (eH * 60 + eM) < (sH * 60 + sM);
   }
 
   function getSummary() {
@@ -135,13 +147,32 @@ export function ScheduleModal({ schedule, onClose, onSaved }) {
       listIds,
       enabled: true
     };
+    if (startTime === endTime) {
+      alert('Start and end times must be different.');
+      return;
+    }
+    // Read fresh state at save time: a window may have started since the editor opened.
+    const data = await getData();
+    let existing = null;
     if (schedule && schedule.id) {
-      const existing = (await getSchedules()).find(s => s.id === schedule.id);
+      existing = data.schedules.find(s => s.id === schedule.id) || null;
       if (existing) sched.enabled = existing.enabled;
     }
-    await saveSchedule(sched);
-    chrome.runtime.sendMessage({ type: 'refreshRules' });
-    onSaved();
+    const inForce = !!existing && isScheduleInForce(existing, data.suspensions);
+    const doSave = async () => {
+      await saveSchedule(sched);
+      chrome.runtime.sendMessage({ type: 'refreshRules' });
+      onSaved();
+    };
+    if (inForce && isScheduleWeakened(existing, sched)) {
+      gate({
+        title: 'Loosen an active schedule',
+        description: `“${existing.name}” is blocking right now, and these changes block less.`,
+        confirmLabel: 'Save changes'
+      }, doSave);
+      return;
+    }
+    await doSave();
   }
 
   const attachedLists = listIds.map(id => allLists.find(l => l.id === id)).filter(Boolean);
@@ -192,17 +223,18 @@ export function ScheduleModal({ schedule, onClose, onSaved }) {
                 <input
                   type="text"
                   value={siteInput}
-                  onInput={e => setSiteInput(e.target.value)}
+                  onInput={e => { setSiteInput(e.target.value); setSiteError(''); }}
                   onKeyDown={e => e.key === 'Enter' && addSite()}
                   class="field flex-1"
                   placeholder="e.g. youtube.com"
                 />
                 <button class="btn btn-outline" onClick={addSite}>ADD</button>
               </div>
+              <EntryHint error={siteError} />
               <div class="flex flex-wrap gap-1.5 min-h-8">
                 {sites.map((site, i) => (
                   <span key={site + i} class="chip">
-                    {site}
+                    {formatEntry(site)}
                     <button class="chip-remove" onClick={() => removeSite(i)}>&times;</button>
                   </span>
                 ))}
@@ -246,6 +278,7 @@ export function ScheduleModal({ schedule, onClose, onSaved }) {
           <button class="btn btn-ink" onClick={save}>SAVE SCHEDULE</button>
         </div>
       </div>
+      {frictionModal}
     </div>
   );
 }

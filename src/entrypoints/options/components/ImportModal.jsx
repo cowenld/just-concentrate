@@ -2,7 +2,9 @@ import { useState, useRef } from 'preact/hooks';
 import { Modal } from '../../../components/Modal.jsx';
 import { Icon } from '../../../components/Icon.jsx';
 import { IMPORT_FORMATS, autoDetectAndParse } from '../../../lib/importers.js';
-import { saveList, saveSchedule, getAllowlist, saveAllowlist, saveSettings, generateId } from '../../../lib/storage.js';
+import { saveList, saveSchedule, getAllowlist, saveAllowlist, getSettings, saveSettings, getBudgets, saveBudget, generateId, getCachedBlockState, isBlockingAnything } from '../../../lib/storage.js';
+import { useFrictionGate } from '../../../hooks/useFrictionGate.jsx';
+import { isFrictionDowngrade } from '../../../lib/friction.js';
 
 export function ImportModal({ visible, onClose, onImported }) {
   const [format, setFormat] = useState('auto');
@@ -12,6 +14,7 @@ export function ImportModal({ visible, onClose, onImported }) {
   const [importing, setImporting] = useState(false);
   const [done, setDone] = useState(null);
   const fileRef = useRef(null);
+  const { gate, frictionModal } = useFrictionGate();
 
   function reset() {
     setResult(null);
@@ -66,8 +69,17 @@ export function ImportModal({ visible, onClose, onImported }) {
     e.target.value = '';
   }
 
+  // Imported allowlist entries can open holes in an active block.
   async function handleImport() {
     if (!result) return;
+    if ((result.allowlist || []).length > 0 && isBlockingAnything(await getCachedBlockState())) {
+      gate({ title: 'Import allowed sites during a block', description: `A block is active. This adds ${result.allowlist.length} always-allowed ${result.allowlist.length === 1 ? 'site' : 'sites'}.`, confirmLabel: 'Import' }, doImport);
+      return;
+    }
+    await doImport();
+  }
+
+  async function doImport() {
     setImporting(true);
     setError(null);
 
@@ -100,8 +112,23 @@ export function ImportModal({ visible, onClose, onImported }) {
         await saveAllowlist(merged);
       }
 
+      const budgets = result.budgets || [];
+      if (budgets.length > 0) {
+        const existing = await getBudgets();
+        for (const b of budgets) {
+          if (!existing.some(e => e.domain === b.domain)) await saveBudget({ ...b });
+        }
+      }
+
       if (result.settings) {
-        const { syncEnabled, ...rest } = result.settings;
+        // Device-local preferences and the phrase are never imported; friction
+        // only ever gets stronger through an import.
+        const { syncEnabled: _sync, onboardingComplete: _onboarded, passphrase: _phrase, trackTime: _track, ...rest } = result.settings;
+        if (rest.frictionLevel === 'passphrase' && !(await getSettings()).passphrase) delete rest.frictionLevel;
+        if (isFrictionDowngrade(await getSettings(), rest)) {
+          delete rest.frictionLevel;
+          delete rest.cooldownSeconds;
+        }
         await saveSettings(rest);
       }
 
@@ -128,6 +155,7 @@ export function ImportModal({ visible, onClose, onImported }) {
     : 0;
 
   return (
+    <>
     <Modal visible={visible} onClose={handleClose} title="Import sites">
 
       {done && (
@@ -213,6 +241,9 @@ export function ImportModal({ visible, onClose, onImported }) {
                 {(result.schedules || []).length > 0 && (
                   <span>{result.schedules.length} {result.schedules.length === 1 ? 'schedule' : 'schedules'}</span>
                 )}
+                {(result.budgets || []).length > 0 && (
+                  <span>{result.budgets.length} daily {result.budgets.length === 1 ? 'limit' : 'limits'}</span>
+                )}
                 {(result.allowlist || []).length > 0 && (
                   <span>{result.allowlist.length} allowlist {result.allowlist.length === 1 ? 'entry' : 'entries'}</span>
                 )}
@@ -230,5 +261,7 @@ export function ImportModal({ visible, onClose, onImported }) {
         </div>
       )}
     </Modal>
+    {frictionModal}
+    </>
   );
 }

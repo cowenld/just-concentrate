@@ -1,12 +1,15 @@
 import { useState, useEffect } from 'preact/hooks';
-import { getSchedules, getLists, saveSchedule, deleteSchedule } from '../../../lib/storage.js';
-import { isScheduleActive } from '../../../lib/schedule-engine.js';
+import { saveSchedule, deleteSchedule, clearSuspension } from '../../../lib/storage.js';
+import { isScheduleInForce } from '../../../lib/schedule-engine.js';
+import { useStorage } from '../../../hooks/useStorage.js';
+import { useFrictionGate } from '../../../hooks/useFrictionGate.jsx';
+import { BudgetsSection } from './BudgetsSection.jsx';
 import { applyTemplateToStorage, TEMPLATES } from '../../../lib/templates.js';
 import { Icon } from '../../../components/Icon.jsx';
 import { DayPills } from '../../../components/DayPills.jsx';
 import { Modal } from '../../../components/Modal.jsx';
 import { ScheduleModal } from './ScheduleModal.jsx';
-import { windowLabel } from '../../../lib/formatting.js';
+import { windowLabel, formatTime } from '../../../lib/formatting.js';
 
 const DAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 const DISPLAY_ORDER = [1, 2, 3, 4, 5, 6, 0];
@@ -18,57 +21,55 @@ const EMPTY_TEMPLATE_META = [
 ];
 
 export function SchedulesTab({ onNavigateTab }) {
-  const [schedules, setSchedules] = useState([]);
-  const [lists, setLists] = useState([]);
+  const data = useStorage(d => d);
   const autoOpen = new URLSearchParams(window.location.search).get('newSchedule') === '1';
   const [editingSchedule, setEditingSchedule] = useState(autoOpen ? null : undefined);
   const [deletingSchedule, setDeletingSchedule] = useState(null);
   const [templateLoading, setTemplateLoading] = useState(false);
+  const { gate, frictionModal } = useFrictionGate();
 
   useEffect(() => {
-    refresh();
     if (autoOpen) {
       const url = new URL(window.location.href);
       url.searchParams.delete('newSchedule');
       window.history.replaceState({}, '', url.toString());
     }
-    const onChange = (changes) => {
-      if (changes.justConcentrate) refresh();
-    };
-    chrome.storage.onChanged.addListener(onChange);
-    return () => chrome.storage.onChanged.removeListener(onChange);
   }, [autoOpen]);
 
-  async function refresh() {
-    const [s, l] = await Promise.all([getSchedules(), getLists()]);
-    setSchedules(s);
-    setLists(l);
+  if (!data) return null;
+  const { schedules, lists, suspensions } = data;
+  const inForce = s => isScheduleInForce(s, suspensions);
+
+  async function setEnabled(schedule, enabled) {
+    await saveSchedule({ ...schedule, enabled });
+    chrome.runtime.sendMessage({ type: 'refreshRules' });
   }
 
-  async function toggleSchedule(schedule, enabled) {
-    if (!enabled && isScheduleActive(schedule)) {
-      const url = chrome.runtime.getURL(
-        `blocked.html?action=endFocus&schedule=${encodeURIComponent(schedule.name)}`
-      );
-      chrome.tabs.create({ url });
+  function toggleSchedule(schedule, enabled) {
+    if (!enabled && inForce(schedule)) {
+      gate({
+        title: 'Turn off schedule',
+        description: `“${schedule.name}” is blocking right now. This turns it off until you turn it back on.`,
+        confirmLabel: 'Turn off'
+      }, () => setEnabled(schedule, false));
       return;
     }
-    await doDisable(schedule, enabled);
+    setEnabled(schedule, enabled);
   }
 
-  async function doDisable(schedule, enabled = false) {
-    const updated = { ...schedule, enabled };
-    await saveSchedule(updated);
+  async function removeSchedule(schedule) {
+    await deleteSchedule(schedule.id);
     chrome.runtime.sendMessage({ type: 'refreshRules' });
-    refresh();
   }
 
   function handleDelete(schedule) {
-    if (schedule.enabled && isScheduleActive(schedule)) {
-      const url = chrome.runtime.getURL(
-        `blocked.html?action=deleteSchedule&schedule=${encodeURIComponent(schedule.name)}&scheduleId=${encodeURIComponent(schedule.id)}`
-      );
-      chrome.tabs.create({ url });
+    if (inForce(schedule)) {
+      gate({
+        title: 'Delete schedule',
+        description: `“${schedule.name}” is blocking right now. This permanently deletes it.`,
+        confirmLabel: 'Delete',
+        destructive: true
+      }, () => removeSchedule(schedule));
       return;
     }
     setDeletingSchedule(schedule);
@@ -76,17 +77,19 @@ export function SchedulesTab({ onNavigateTab }) {
 
   async function confirmDelete() {
     if (!deletingSchedule) return;
-    await deleteSchedule(deletingSchedule.id);
-    chrome.runtime.sendMessage({ type: 'refreshRules' });
+    await removeSchedule(deletingSchedule);
     setDeletingSchedule(null);
-    refresh();
+  }
+
+  async function resume(schedule) {
+    await clearSuspension(`schedule:${schedule.id}`);
+    chrome.runtime.sendMessage({ type: 'refreshRules' });
   }
 
   async function applyTemplate(key) {
     setTemplateLoading(true);
     await applyTemplateToStorage(key);
     chrome.runtime.sendMessage({ type: 'refreshRules' });
-    await refresh();
     setTemplateLoading(false);
   }
 
@@ -106,20 +109,25 @@ export function SchedulesTab({ onNavigateTab }) {
               key={s.id}
               schedule={s}
               lists={lists}
+              active={inForce(s)}
+              pausedUntil={suspensions[`schedule:${s.id}`] > Date.now() ? suspensions[`schedule:${s.id}`] : null}
               onToggle={toggleSchedule}
               onEdit={() => setEditingSchedule(s)}
               onDelete={() => handleDelete(s)}
+              onResume={() => resume(s)}
               onNavigateTab={onNavigateTab}
             />
           ))}
         </div>
       )}
 
+      <BudgetsSection />
+
       {editingSchedule !== undefined && (
         <ScheduleModal
           schedule={editingSchedule}
           onClose={() => setEditingSchedule(undefined)}
-          onSaved={() => { setEditingSchedule(undefined); refresh(); }}
+          onSaved={() => setEditingSchedule(undefined)}
         />
       )}
 
@@ -129,10 +137,11 @@ export function SchedulesTab({ onNavigateTab }) {
         </p>
         <div class="flex justify-end gap-3">
           <button class="btn btn-outline" onClick={() => setDeletingSchedule(null)}>Cancel</button>
-          <button class="btn bg-red-600 text-white hover:bg-red-700" onClick={confirmDelete}>Delete</button>
+          <button class="btn btn-danger" onClick={confirmDelete}>Delete</button>
         </div>
       </Modal>
 
+      {frictionModal}
     </section>
   );
 }
@@ -188,7 +197,7 @@ function EmptyState({ onTemplate, onNew, loading }) {
   );
 }
 
-function ScheduleCard({ schedule: s, lists, onToggle, onEdit, onDelete, onNavigateTab }) {
+function ScheduleCard({ schedule: s, lists, active, pausedUntil, onToggle, onEdit, onDelete, onResume, onNavigateTab }) {
   const siteCount = (s.adHocSites || []).length;
   const listNames = (s.listIds || []).map(id => {
     const list = lists.find(l => l.id === id);
@@ -221,6 +230,13 @@ function ScheduleCard({ schedule: s, lists, onToggle, onEdit, onDelete, onNaviga
         <div class="flex items-center gap-2 mb-1.5">
           <span class={`text-[15px] font-semibold ${nameClass}`}>{s.name}</span>
           {typeLabel && <span class={`chip ${typeChipClass} h-6 px-2 text-[10px]`} title={s.blackout ? 'Blocks all sites except those on your permanent allowed list' : ''}>{typeLabel}</span>}
+          {active && <span class="chip chip-accent h-6 px-2 text-[10px]">BLOCKING NOW</span>}
+          {pausedUntil && (
+            <span class="chip chip-muted h-6 px-2 text-[10px]">
+              PAUSED UNTIL {formatTime(new Date(pausedUntil).toTimeString().slice(0, 5)).toUpperCase()}
+              <button class="bg-transparent border-none p-0 ml-1.5 cursor-pointer underline text-accent font-mono text-[10px]" onClick={onResume}>RESUME</button>
+            </span>
+          )}
         </div>
         <div class={`mono-cap mb-2.5 ${detailsClass}`}>
           {detailParts.join(' · ')}

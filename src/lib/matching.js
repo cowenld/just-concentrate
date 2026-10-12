@@ -10,6 +10,29 @@ export function domainMatches(urlHostname, blockedDomain) {
   return false;
 }
 
+// Blocklist entries are strings in one of three forms:
+//   "reddit.com"          → { type: 'domain', domain }
+//   "linkedin.com/feed"   → { type: 'path', domain, path: '/feed' }
+//   "keyword:casino"      → { type: 'keyword', keyword }
+export function parseEntry(entry) {
+  if (entry.startsWith('keyword:')) return { type: 'keyword', keyword: entry.slice('keyword:'.length) };
+  const slash = entry.indexOf('/');
+  if (slash === -1) return { type: 'domain', domain: entry };
+  return { type: 'path', domain: entry.slice(0, slash), path: entry.slice(slash) };
+}
+
+// Does a blocklist entry match a URL object? Paths match themselves and their
+// sub-paths ("/feed" matches "/feed/x" but not "/feedback"), case-insensitively.
+export function entryMatchesUrl(entry, url) {
+  const parsed = parseEntry(entry);
+  if (parsed.type === 'keyword') return url.href.toLowerCase().includes(parsed.keyword);
+  if (!domainMatches(url.hostname, parsed.domain)) return false;
+  if (parsed.type === 'domain') return true;
+  const pathname = url.pathname.toLowerCase();
+  const path = parsed.path.toLowerCase();
+  return pathname === path || pathname.startsWith(path + '/');
+}
+
 export function getEffectiveBlocklist(schedule, lists) {
   const domains = new Set();
 

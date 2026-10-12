@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  normalizeDomain, formatTime, formatTimeLabel, windowLabel, formatDaysLabel
+  normalizeDomain, normalizeEntry, formatEntry, formatTime, formatTimeLabel, windowLabel, formatDaysLabel
 } from './formatting.js';
 
 describe('normalizeDomain', () => {
@@ -40,5 +40,59 @@ describe('formatDaysLabel', () => {
     expect(formatDaysLabel([1, 2, 3, 4, 5])).toBe('MON–FRI');
     expect(formatDaysLabel([0, 6])).toBe('SAT–SUN');
     expect(formatDaysLabel([1, 3, 5])).toBe('MON, WED, FRI');
+  });
+});
+
+describe('normalizeDomain validation', () => {
+  it('rejects input that is not a domain', () => {
+    expect(normalizeDomain('foo')).toBe('');
+    expect(normalizeDomain('   ')).toBe('');
+    expect(normalizeDomain('*.x.com')).toBe('x.com');
+    expect(normalizeDomain('localhost')).toBe('localhost');
+  });
+});
+
+describe('normalizeEntry', () => {
+  it('normalizes domains like normalizeDomain', () => {
+    expect(normalizeEntry(' HTTPS://WWW.Reddit.com ')).toBe('reddit.com');
+    expect(normalizeEntry('*.twitter.com')).toBe('twitter.com');
+  });
+  it('keeps a path, dropping query, hash and trailing slashes', () => {
+    expect(normalizeEntry('https://www.linkedin.com/feed/?trk=1#x')).toBe('linkedin.com/feed');
+    expect(normalizeEntry('youtube.com/shorts/')).toBe('youtube.com/shorts');
+    expect(normalizeEntry('reddit.com/')).toBe('reddit.com');
+  });
+  it('supports keyword: entries', () => {
+    expect(normalizeEntry('keyword: Casino ')).toBe('keyword:casino');
+    expect(normalizeEntry('keyword:')).toBe('');
+  });
+  it('rejects junk', () => {
+    expect(normalizeEntry('foo')).toBe('');
+    expect(normalizeEntry('')).toBe('');
+  });
+  it('converts internationalized domains to punycode', () => {
+    expect(normalizeEntry('bücher.de')).toBe('xn--bcher-kva.de');
+  });
+});
+
+describe('formatEntry', () => {
+  it('renders entries for display', () => {
+    expect(formatEntry('keyword:casino')).toBe('“casino” in URL');
+    expect(formatEntry('linkedin.com/feed')).toBe('linkedin.com/feed');
+  });
+});
+
+describe('normalizeEntry edge cases', () => {
+  it('percent-encodes non-ASCII keywords and paths like the browser does', () => {
+    expect(normalizeEntry('keyword:café')).toBe('keyword:caf%c3%a9');
+    expect(normalizeEntry('de.wikipedia.org/wiki/Café')).toBe('de.wikipedia.org/wiki/caf%c3%a9');
+  });
+  it('rejects empty or multi-word keywords', () => {
+    expect(normalizeEntry('keyword:^^')).toBe('');
+    expect(normalizeEntry('keyword:online poker')).toBe('');
+    expect(normalizeEntry('keyword:a*b')).toBe('keyword:ab');
+  });
+  it('formats encoded entries readably', () => {
+    expect(formatEntry('keyword:caf%c3%a9')).toBe('“café” in URL');
   });
 });

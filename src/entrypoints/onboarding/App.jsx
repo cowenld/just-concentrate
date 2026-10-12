@@ -126,28 +126,26 @@ export function App() {
   }
 
   if (step === 2) {
-    const defaultPhrase = 'I am choosing deep focus over distraction right now';
     return (
       <div class="dotfield bg-bg text-ink font-sans min-h-screen py-10 px-6">
         <div class="max-w-[720px] mx-auto bg-card border border-ink p-8">
           <div class="flex items-center gap-2 mb-1">
-            <Icon name="shield-check" size={24} />
-            <span class="text-xl font-semibold text-ink">Your commitment phrase</span>
+            <Icon name="lock" size={22} />
+            <span class="text-xl font-semibold text-ink">Want to make it stick?</span>
           </div>
           <p class="text-ink-3 text-sm mb-2">
-            To override a block, you'll type this phrase. It's a moment to pause and remember why you're here.
+            Ending a block early already means waiting out a short cooldown. Add a commitment phrase and you'll also
+            type it, exactly, first. Write your own reason; it's a moment to remember why you're doing this.
           </p>
-          <p class="text-ink-3 text-sm mb-6">
-            We've set a default. Personalise it or keep it as is.
-          </p>
-          <input id="ob-phrase-input" class="field mb-4" type="text" value={defaultPhrase} />
+          <p class="text-ink-3 text-sm mb-6">Optional. You can set or change it later in Settings.</p>
+          <input id="ob-phrase-input" class="field mb-4" type="text" placeholder="e.g. I'm finishing my thesis this month" autocomplete="off" />
           <div class="flex justify-between items-center">
             <button class="mono-cap hover:text-ink cursor-pointer bg-transparent border-none p-0"
-              onClick={() => { setPhraseWasSaved(true); setStep(3); }}>
-              Keep default
+              onClick={() => setStep(3)}>
+              Not now
             </button>
             <button class="btn btn-ink" onClick={savePhrase}>
-              Save <Icon name="arrow-right" size={14} />
+              Save phrase <Icon name="arrow-right" size={14} />
             </button>
           </div>
         </div>
