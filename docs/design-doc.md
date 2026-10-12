@@ -24,12 +24,12 @@ The wedge in a crowded free market is three things competitors don't combine: **
 | D4 | Presets | **Bundled in the extension.** "Live" tracks the bundled copy (refreshes on extension update); "frozen" is a forked, editable copy. No runtime fetch. |
 | D5 | Friction | Self-imposed, three levels: none / wait / passphrase. **Default is "wait"** (a cooldown; revised in v0.4, was "off" — an instant one-click unblock made the default product a no-op). Passphrase is opt-in with the user's own words. Resume-on-re-enable + recursive typing challenge + cooling-off countdown for teardown. Weakening anything active (turning off/editing an active schedule, removing sites from an active list, raising a budget, allowing a site mid-block, lowering friction) passes friction; strengthening is always free. Flat cost (no escalation). Honest copy. |
 | D6 | Matching | Domain entries (registrable domain + all subdomains) by default; `*.x.com` is the same as `x.com`. "Advanced" entries: **paths** (`linkedin.com/feed`) and **keywords** (`keyword:poker`). In-page element blocking still deferred. |
-| D7 | IA | Four sections — Schedules · Allowed sites · Usage · Settings — plus a popup, the block page, and onboarding. |
+| D7 | IA | Five tabs — Schedules · Allowed sites · Usage · Site lists · Settings — plus a popup, the block page, and onboarding. |
 | D8 | Privacy | **Zero runtime network** (lists bundled). No network/host permission. Open-source. |
 | D9 | Coaching | Rule-based + templated, fully local. **No LLM, no external data** — not even earmarked for later. |
 | D10 | Passphrase | The user's own *reason*, set in Settings, reused everywhere. Exact match, paste disabled, typing-test UX. Recursive (changing it requires typing the current one). |
 | D11 | Sync | v1, **config-only**, last-write-wins. Usage stays local. |
-| D12 | Import/export | Own JSON in v1. Competitor-import (LeechBlock/StayFocusd formats) parked as later research. |
+| D12 | Import/export | Own JSON export/import. Competitor import shipped in v0.2.0: LeechBlock NG, StayFocusd, Block Site, Cold Turkey, plain text. |
 
 ## 3. Goals / Non-goals
 
@@ -55,7 +55,7 @@ A single domain entry. **Matches the registrable domain and all subdomains** (`r
 A named, reusable collection of sites. **Lists are pure — sites only, no timing.** The noun to a schedule's verb, which keeps a list reusable across very different schedules. Three origins:
 - **User lists** — created/edited by the user (e.g. "Social", "Shopping").
 - **Frozen presets** — small opinionated starter templates ("Social media", "News", "Streaming"). Pulling one in **forks an editable copy**; it never changes underneath the user.
-- **Live presets** — large fast-moving categories that can't be hand-curated ("Adult", and a future malware list). **Bundled inside the extension** and referenced, not copied, so they refresh when the extension updates. No web fetch (D4/D8).
+- **Live presets** — large fast-moving categories that can't be hand-curated ("Adult", and a future malware list). **Bundled inside the extension**; the list keeps a `presetKey` and its sites are overwritten from the bundled copy on every extension update. No web fetch (D4/D8).
 
 ### 4.3 Schedule
 The "when/how". Each has a name, active days, a time window (start/end; may cross midnight), an action (**block page** or **redirect**), and a blocklist of **referenced lists (many-to-many) + ad-hoc individual sites**. Effective blocklist = `union(referenced lists) + ad-hoc sites`. Individual sites can always be dropped straight onto a schedule; lists appear only when reuse is wanted (progressive disclosure). Authored in the schedule editor (§6.2).
@@ -73,37 +73,39 @@ Ad-hoc immediate commit: block all listed sites (or everything-except-allowlist)
 
 ## 5. Information architecture
 
-Four sections — against StayFocusd's eleven — plus three supporting surfaces.
-- **Schedules** — home. Cards reading as sentences ("Weekdays · 09:00–17:00 · block page"), with site/list chips, a toggle and edit. Prominent **Focus now**.
-- **Allowed sites** — the global allowlist + the blackout toggle.
+Five tabs — against StayFocusd's eleven — plus three supporting surfaces.
+- **Schedules** — home. Cards reading as sentences ("Weekdays · 09:00–17:00 · block page"), with site/list chips, a toggle and edit; daily time **budgets** below.
+- **Allowed sites** — the global allowlist (blackout itself is a per-schedule / per-focus-session option).
 - **Usage** — local-only insights + coaching (§9).
-- **Settings** — friction options, the passphrase, lists library, import/export, sync toggle, theme.
-- **Popup** — daily touchpoint: status at a glance, Focus-now, quick pause, one-click "block this site."
+- **Site lists** — the lists library: user lists and bundled presets.
+- **Settings** — friction level, the passphrase, block page message/CSS, time tracking, import/export, sync toggle, privacy statement.
+- **Popup** — daily touchpoint: status at a glance, **Focus now** (duration or Pomodoro), the current site, one-click "Block site".
 - **Block page** (`blocked.html`) — the most-seen screen (§6.3).
 - **Onboarding** — first-run welcome (§6.1).
 
 ## 6. Key flows & screens
 
 ### 6.1 Onboarding & empty states
-On install, open a welcome tab — **one screen, fully skippable**. Lead with one-tap starter templates backed by bundled preset lists, so nobody types a domain to get value:
+On install, open a welcome tab — **three short steps, fully skippable**. Step 1 leads with one-tap starter templates backed by bundled preset lists, so nobody types a domain to get value:
 - **Work focus** — Social, weekdays, 09:00–17:00.
 - **Bedtime** — Social + Streaming, every day, 22:00–07:00.
-- **Deep work** — block everything except a short allowlist, on demand via Focus now.
-- **Custom** — opens the schedule editor inline (name, days, time, sites).
+- **Deep work** — an all-day blackout schedule (everything except the allowlist), created **disabled** so the user switches it on when needed.
+- **Custom** — opens the options page with the schedule editor (`options.html?newSchedule=1`).
 
-"Start from scratch" and a small "import from another blocker" sit underneath. **Friction stays out of onboarding** — get a working block first; then offer one optional, skippable nudge: *"want to make it stick? set your commitment phrase."* After creating a schedule, show a quiet confirmation it's live ("youtube.com is now blocked on weekdays, 9–5"). Every later empty state (Schedules, Lists, Allowed sites) reuses this same template-and-teach moment, so clearing everything returns to onboarding rather than a void.
+A "Switching from another blocker?" import sits underneath. **Friction stays out of the first step** — get a working block first; step 2 is one optional, skippable nudge: *"want to make it stick? set your commitment phrase."* Step 3 is a quiet confirmation ("Your Work Focus schedule is armed"). The empty Schedules tab reuses the same templates, so clearing everything returns to that moment rather than a void; other empty states (Site lists, Allowed sites) are plain prompts.
 
 ### 6.2 The schedule editor
 One reused component (onboarding Custom, editing, empty-state create). Four blocks, with defaults pre-loaded (weekdays, 09:00–17:00, block page) so a new schedule is one edit from done:
-- **Name** — auto-filled, editable.
+- **Name** — optional (placeholder "e.g. Work focus"); saved as "Untitled schedule" if left blank.
 - **When** — day chips (quick every day / weekdays / weekends) + start/end time, local clock.
-- **What** — a single "Block these" area mixing two chip types: **list reference chips** ("Social · 12 sites"; removing *detaches*, doesn't delete; a "used in N schedules" label rides along) and plain **ad-hoc site chips** owned by this schedule. One "+ add" offers both. A **blackout toggle** at the top — *block these sites* vs *block everything except my allowlist* — greys the picker and leans on the global allowlist, making "Deep work" just another schedule.
+- **What** — a "Block these" area mixing two chip types: **list reference chips** (removing *detaches*, doesn't delete; the Site lists tab shows where each list is used) and plain **ad-hoc site chips** owned by this schedule, added via a site input + ADD and a separate "+ attach list" picker. A **blackout toggle** at the top — *block these sites* vs *block everything except my allowlist* — greys the picker and leans on the global allowlist, making "Deep work" just another schedule.
 - **How** — block page (default) or redirect to a URL.
 
 A live plain-English summary line builds as you type (matches the card), and an "overnight — ends next morning" hint appears when the end time precedes the start.
 
 ### 6.3 The block moment
-The block page names the schedule that caught you, shows the site, shows **when it lifts** (live countdown / "back at 17:00"), in a calm tone that reminds you *you* set this — no shaming. Three escape actions, each a different cost (scaled to the chosen friction level; passphrase level shown):
+The block page names the schedule that caught you, shows the site, shows **when it lifts** (live countdown / "back at 17:00"), in a calm tone that reminds you *you* set this — no shaming.
+
 **Decision (v0.4): one escape action only — "End block early".** Snooze and "allow permanently" were cut: snooze invited repeated five-minute dips, and false positives are better fixed calmly in the Allowed sites tab (which is itself friction-gated while a block is active).
 - **End block early** — passes the user's friction level (phrase → cooling-off countdown, or countdown only, or a plain confirm) stating what turns off and until when, with a "keep me focused" option throughout. The pause is where people reconsider. It lifts *everything* blocking that URL until it would have ended anyway: schedules are **suspended until their window ends** (they resume on their own next window), a daily budget is lifted until midnight, a focus session ends.
 - **Keep me focused** — leaves for a new tab. When the countdown reaches zero the page returns to the URL that was blocked.
@@ -112,11 +114,11 @@ In **redirect** mode there's no page to host buttons; to override, the user turn
 
 ## 7. Friction & bypass-resistance (honest by design)
 
-No consumer extension can stop itself being disabled at `chrome://extensions`, nor cover other browsers/profiles/Incognito. Friction's job is to defeat the **impulse**, not a sustained choice. **Off by default, opt-in, self-imposed**, with a configurable level (none / short wait / passphrase; passphrase is the strong default given the product's purpose). Mechanisms:
+No consumer extension can stop itself being disabled at `chrome://extensions`, nor cover other browsers/profiles/Incognito. Friction's job is to defeat the **impulse**, not a sustained choice. **Self-imposed**, with a configurable level: none / wait / passphrase. **Default is wait** (D5); the passphrase is opt-in. Mechanisms:
 
 1. **Resume-on-re-enable.** All state (schedules, suspensions, focus sessions) lives in storage, and the service worker re-applies rules and alarms on its first wake-up after any restart, update, or disable/enable (a `chrome.storage.session` flag detects this). Toggling the extension off and on **doesn't clear an active block** — it resumes for the time left. Kills the "flick off, flick on" bypass.
 2. **The passphrase = the user's own reason** (D10). Set once in Settings; shown as reference text on the block page (typing-test style with progress); **exact match** (case + punctuation) is the friction; **paste disabled** or the whole thing is theatre; **recursive** — changing it in Settings requires typing the current one, closing the back door.
-3. **Flat cost, no escalation** — a paragraph per snooze is already self-limiting.
+3. **Flat cost, no escalation** — typing a paragraph and waiting out a cooldown per escape is already self-limiting.
 
 **Copy stays straight:** a commitment device, not a cage. True lockdown on one's own machine is only possible via enterprise force-install (`ExtensionInstallForcelist`) — a power-user footnote. Anyone needing real enforcement belongs on OS-/router-level tools.
 
@@ -134,13 +136,13 @@ No consumer extension can stop itself being disabled at `chrome://extensions`, n
 Two on-device layers; **no LLM, no external data** (D9) — routing browsing behaviour through a model would break the one promise the product is built on.
 - **Dashboard** — per-site time (active tab, window focused, user not idle; 30-day retention; can be turned off), block counts, overrides; stored locally. A focus session shows its countdown on the **toolbar badge** (v0.4: replaces the floating on-page timer, which needed `<all_urls>` host access).
 - **Daily time budgets** — "15 minutes of reddit.com a day", any time of day; once used up the site is blocked until midnight.
-- **Coaching** — each nudge is a **threshold on a local counter + a pre-written template** with the numbers filled in (e.g. `if blockCount(site, schedule, 7d) >= 10 → "{site} pulled you back {n} times during {schedule} this week"` + a one-tap "add a pause"). A dozen such rules cover most of the value; rotate phrasings so it doesn't read robotically.
+- **Coaching** — each nudge is a **threshold on a local counter + a pre-written template** with the numbers filled in (e.g. `"{site} pulled you back {n} times this week"`). Five rules ship today (`lib/coaching.js`): budget kept, zero overrides, top site, heavy-use site (with a one-tap "Add 30 min/day limit"), and a weekly block total.
 
-Discipline: framed around the user's goal, **leads with wins, never a failure count**; tunable (full / wins-only / off); individually dismissible. **Pull, not push** by default — it lives in the Usage tab and waits to be visited; no real-time "you're slipping" popups. Soft progress framing over brittle streak counters (which shame when broken). Generative/conversational coaching is out of scope entirely.
+Discipline: framed around the user's goal, **leads with wins, never a failure count**; individually dismissible (a full / wins-only / off setting is in the backlog). **Pull, not push** by default — it lives in the Usage tab and waits to be visited; no real-time "you're slipping" popups. Soft progress framing over brittle streak counters (which shame when broken). Generative/conversational coaching is out of scope entirely.
 
 ## 10. Privacy & data
 
-**Zero runtime network.** Category lists are **bundled** in the extension and refresh via Web Store releases, so there is no fetch, no network or host permission, and "watch the network tab do nothing" is literally true — unplug the ethernet and it still works (D4/D8). Commitments: all data in `chrome.storage` on-device; no accounts, identifiers, or analytics SDK; minimal permissions (now shorter, with no network); an optional sync that is **Chrome's own profile sync**, never our server; and the real trust lever — **open-source** the extension. Backed by a plain privacy policy (the store needs one regardless) and a one-screen in-app statement linking to the source.
+**Zero runtime network.** Category lists are **bundled** in the extension and refresh via Web Store releases, so there is no fetch, no network or host permission, and "watch the network tab do nothing" is literally true — unplug the ethernet and it still works (D4/D8). Commitments: all data in `chrome.storage` on-device; no accounts, identifiers, or analytics SDK; minimal permissions (now shorter, with no network); an optional sync that is **Chrome's own profile sync**, never our server; and the real trust lever — **open-source** the extension. Backed by a plain privacy policy (the store needs one regardless) and an in-app privacy statement in Settings (a link to the source is in the backlog).
 
 ## 11. Feature scope
 
@@ -178,7 +180,7 @@ Discipline: framed around the user's goal, **leads with wins, never a failure co
   2. `webNavigation.onErrorOccurred` turns the resulting `ERR_BLOCKED_BY_CLIENT` into a redirect to `blocked.html?url=…` (or the schedule's redirect URL).
   3. `onCommitted` + `onHistoryStateUpdated` catch anything the rules missed (rule-update races, SPA route changes for path entries).
   All three read a cached block state computed by one pure function (`computeBlockState`). `chrome.alarms` fires at the next boundary (schedule edge, Pomodoro phase, suspension end, midnight for budgets) **and re-evaluates already-open tabs**, so a tab on a now-blocked site is cut over, not just the next navigation.
-- **Persisted state** (never worker memory, which spins down): schedules, lists, allowlist, settings, commitment/lock end-times, usage counters — all in `chrome.storage`.
+- **Persisted state** (never worker memory, which spins down): schedules, lists, allowlist, budgets, settings, focus session, suspensions, usage counters — all in `chrome.storage`.
 - **Storage:** `chrome.storage.local` — config + runtime state under one key, usage counters under a separate key (so frequent usage writes never trigger rule rebuilds or sync writes). Optional `chrome.storage.sync` for **config only** (schedules/lists/allowlist/budgets/settings; usage stays local; last-write-wins), **sharded** across items to fit the 8KB-per-item quota (~100KB total), written only when the payload changes.
 - **Lists:** bundled assets, no fetch.
 - **Permissions (minimal, no network, no host permissions):** `declarativeNetRequest`, `storage`, `alarms`, `tabs`, `webNavigation`, `idle`. Fonts and preset lists are bundled; nothing is fetched at runtime.
@@ -191,7 +193,7 @@ Discipline: framed around the user's goal, **leads with wins, never a failure co
 3. **Already-open tabs** — v1; cut over at window boundaries (re-evaluate on the alarm).
 4. **Usage attribution mechanics** — active-tab focus, audible tabs, idle detection.
 5. **Final block-page copy** and exact override affordances.
-6. **Competitor import formats** — research LeechBlock/StayFocusd export schemas (P2).
+6. **Competitor import formats** — done (v0.2.0, `lib/importers.js`).
 7. **Distribution** — unpacked first; store later (positioning is "shippable").
 8. **Browser targets** — Chrome first; Edge near-free; Firefox has MV3 differences.
 9. **Naming / branding.**

@@ -24,6 +24,8 @@ Block distracting sites on your schedule. Free, unlimited, and fully local — n
 > • Reusable site lists, plus bundled lists for social media, news, streaming and adult content
 > • Block everything except an allowlist ("deep work" blackout)
 > • Advanced: block just a path (youtube.com/shorts, linkedin.com/feed) or any URL containing a keyword
+> • Show a calm block page with your own message (and optional CSS), or redirect to a site of your choice
+> • Block the site you're on with one click from the toolbar
 >
 > **Focus now**
 > • Start an instant focus session from the toolbar, or run Pomodoro cycles. Sites unblock during breaks
@@ -43,7 +45,7 @@ Block distracting sites on your schedule. Free, unlimited, and fully local — n
 > **Private by design**
 > • No network requests, no accounts, no analytics, no host permissions
 > • Optional Chrome sync for your settings (never your usage) through your own Google account
-> • Import from LeechBlock NG, StayFocusd, Block Site, Cold Turkey or a plain list
+> • Import from LeechBlock NG, StayFocusd, Block Site, Cold Turkey or a plain list; export your setup as JSON
 >
 > Free and unlimited. No premium tier.
 
@@ -64,7 +66,7 @@ Block distracting websites on schedules, focus sessions and daily time limits th
 |---|---|
 | `declarativeNetRequest` | Blocks the top-level page requests for sites the user has chosen to block, before they load. Uses `block` rules only. |
 | `webNavigation` | Detects navigation to a blocked address (including single-page-app route changes and blocked-request errors) so the extension can show its block page in that tab. |
-| `tabs` | Reads tab URLs to apply a new block to tabs that are already open, to show the block page in a tab, and to show the current site in the popup. |
+| `tabs` | Reads tab URLs to apply a new block to tabs that are already open, to show the block page in a tab, to show the current site in the popup, and (if time tracking is on) to attribute local time-on-site to the active tab's hostname. |
 | `storage` | Saves the user's schedules, lists, settings and local usage statistics on the device (and optionally in Chrome sync). |
 | `alarms` | Starts and ends blocks at schedule boundaries and ticks time-limit tracking once a minute. |
 | `idle` | Pauses local time-on-site tracking while the user is away, so daily time limits only count active use. |

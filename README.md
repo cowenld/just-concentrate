@@ -6,7 +6,7 @@ A free, privacy-respecting Chrome extension that blocks distracting websites on 
 
 ### Prerequisites
 
-- Node.js 18+
+- Node.js 20.12+
 - [pnpm](https://pnpm.io/)
 - Chrome browser
 
@@ -53,7 +53,7 @@ The e2e suite serves fake `*.test` sites locally and checks real blocking: domai
 ### Build for Store
 
 ```bash
-pnpm store:assets     # regenerate icons, promo tiles and 1280x800 screenshots
+pnpm store:assets     # regenerate icons, promo tiles and screenshots (1280x800 store shots + detail shots)
 pnpm zip              # creates a .zip ready for Chrome Web Store upload
 ```
 
